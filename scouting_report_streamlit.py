@@ -30,18 +30,62 @@ st.markdown("""
         margin-bottom: 30px;
     }
     .metric-container {
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #2a5298;
-        margin: 10px 0;
-    }
-    .player-card {
-        background: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         margin: 10px 0;
+        color: white;
+    }
+    .metric-container h3 {
+        color: white;
+        margin-top: 0;
+    }
+    .metric-container h1 {
+        color: white !important;
+        margin: 10px 0;
+    }
+    .metric-container p {
+        color: rgba(255, 255, 255, 0.9);
+    }
+    .player-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin: 10px 0;
+        border: 1px solid #e0e0e0;
+    }
+    .player-card h2, .player-card h3 {
+        color: #1e3c72;
+        margin-top: 0;
+    }
+    .player-card p {
+        color: #2c3e50;
+        margin: 8px 0;
+        font-size: 0.95em;
+    }
+    .player-card strong {
+        color: #1e3c72;
+        font-weight: 600;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f0f2f6;
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+    }
+    div[style*="background: #f8f9fa"] {
+        background: linear-gradient(135deg, #e0e7ff 0%, #cfd9df 100%) !important;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 5px 0;
+        color: #1e3c72 !important;
+    }
+    div[style*="background: #f8f9fa"] strong {
+        color: #1e3c72 !important;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -146,7 +190,12 @@ class PlayerPotentialModel:
         if not self.is_fitted:
             return None
         
-        X = self.scaler.transform(player_data.values.reshape(1, -1))
+        # Correction: player_data est déjà un array numpy
+        if isinstance(player_data, np.ndarray):
+            X = self.scaler.transform(player_data.reshape(1, -1))
+        else:
+            X = self.scaler.transform(np.array(player_data).reshape(1, -1))
+        
         potential_score = self.model.predict(X)[0]
         
         # Calcul du potentiel basé sur l'âge et les performances
@@ -167,7 +216,12 @@ class PlayerPotentialModel:
         X = df[features].fillna(0)
         X_scaled = self.scaler.transform(X)
         
-        player_scaled = self.scaler.transform(player_data.values.reshape(1, -1))
+        # Correction: player_data est déjà un array numpy
+        if isinstance(player_data, np.ndarray):
+            player_scaled = self.scaler.transform(player_data.reshape(1, -1))
+        else:
+            player_scaled = self.scaler.transform(np.array(player_data).reshape(1, -1))
+        
         distances = np.sum((X_scaled - player_scaled) ** 2, axis=1)
         
         similar_indices = np.argsort(distances)[1:n_similar+1]
@@ -428,7 +482,7 @@ def main():
         player_ai_data = filtered_df[filtered_df['name'] == selected_player_ai].iloc[0]
         
         # Prédiction du potentiel
-        features_for_prediction = [
+        features_for_prediction = np.array([
             player_ai_data['age'],
             player_ai_data['performance_index'],
             player_ai_data['ground_defence'],
@@ -440,11 +494,9 @@ def main():
             player_ai_data['minutes_played'],
             player_ai_data['goals'],
             player_ai_data['assists']
-        ]
+        ])
         
-        potential_score = st.session_state.ml_model.predict_potential(
-            np.array(features_for_prediction)
-        )
+        potential_score = st.session_state.ml_model.predict_potential(features_for_prediction)
         
         col1, col2 = st.columns(2)
         
@@ -452,7 +504,7 @@ def main():
             st.markdown(f"""
             <div class="metric-container">
                 <h3>🎯 Score de Potentiel IA</h3>
-                <h1 style="color: #2a5298;">{potential_score:.1f}/100</h1>
+                <h1>{potential_score:.1f}/100</h1>
                 <p>Ce score combine l'âge, les performances actuelles et les statistiques pour prédire le potentiel futur du joueur.</p>
             </div>
             """, unsafe_allow_html=True)
@@ -493,7 +545,7 @@ def main():
         st.subheader("🔍 Joueurs similaires")
         
         similar_players = st.session_state.ml_model.get_similar_players(
-            np.array(features_for_prediction),
+            features_for_prediction,
             filtered_df,
             n_similar=5
         )
