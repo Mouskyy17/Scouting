@@ -108,6 +108,11 @@ def map_position_to_category(pos):
     else:
         return 'Midfielder'
 
+# Fonction pour convertir en numérique de manière sécurisée
+def safe_numeric(series):
+    """Convertit une série en numérique en gérant les erreurs"""
+    return pd.to_numeric(series, errors='coerce').fillna(0)
+
 # Chargement des données réelles
 @st.cache_data
 def load_data():
@@ -118,34 +123,42 @@ def load_data():
         # Nettoyer les noms de colonnes (supprimer les espaces)
         df.columns = df.columns.str.strip()
         
+        # Convertir toutes les colonnes numériques nécessaires
+        numeric_columns = ['Age', 'Min', 'Gls', 'Ast', 'CrdY', 'CrdR', 'MP', 'Starts',
+                          'xG', 'xAG', 'Tkl', 'Int', 'Won', 'Cmp%', 'KP', 'Succ', 'SoT']
+        
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = safe_numeric(df[col])
+        
         # Créer le dataframe avec les colonnes nécessaires
         processed_df = pd.DataFrame()
         
         # Mapping des colonnes de base
-        processed_df['name'] = df['Player']
+        processed_df['name'] = df['Player'].astype(str)
         processed_df['age'] = df['Age']
-        processed_df['club'] = df['Squad']
-        processed_df['league'] = df['Comp']
-        processed_df['country'] = df['Nation']
-        processed_df['category'] = df['Pos'].apply(map_position_to_category)
+        processed_df['club'] = df['Squad'].astype(str)
+        processed_df['league'] = df['Comp'].astype(str)
+        processed_df['country'] = df['Nation'].astype(str)
+        processed_df['category'] = df['Pos'].astype(str).apply(map_position_to_category)
         
         # Statistiques de jeu
-        processed_df['minutes_played'] = df['Min'].fillna(0)
-        processed_df['goals'] = df['Gls'].fillna(0)
-        processed_df['assists'] = df['Ast'].fillna(0)
-        processed_df['yellow_cards'] = df['CrdY'].fillna(0)
-        processed_df['red_cards'] = df['CrdR'].fillna(0)
-        processed_df['matches_played'] = df['MP'].fillna(0)
-        processed_df['starts'] = df['Starts'].fillna(0)
+        processed_df['minutes_played'] = df['Min']
+        processed_df['goals'] = df['Gls']
+        processed_df['assists'] = df['Ast']
+        processed_df['yellow_cards'] = df['CrdY']
+        processed_df['red_cards'] = df['CrdR']
+        processed_df['matches_played'] = df['MP']
+        processed_df['starts'] = df['Starts']
         
         # Calcul de l'indice de performance (basé sur plusieurs métriques)
         # Normaliser les stats pour avoir un score sur 100
         processed_df['performance_index'] = (
-            (df['Gls'].fillna(0) * 3 + 
-             df['Ast'].fillna(0) * 2 + 
-             df['Min'].fillna(0) / 30 +
-             df['xG'].fillna(0) * 2 +
-             df['xAG'].fillna(0) * 2) / 2
+            (df['Gls'] * 3 + 
+             df['Ast'] * 2 + 
+             df['Min'] / 30 +
+             df['xG'] * 2 +
+             df['xAG'] * 2) / 2
         ).clip(0, 100)
         
         # Pour les joueurs avec peu de stats, ajuster le score
@@ -161,41 +174,42 @@ def load_data():
         # Attributs techniques (basés sur les stats du CSV)
         # Ground Defence (tacles, interceptions)
         processed_df['ground_defence'] = (
-            (df['Tkl'].fillna(0) * 2 + df['Int'].fillna(0)) * 5
+            (df['Tkl'] * 2 + df['Int']) * 5
         ).clip(0, 100)
         
         # Aerial Play (duels aériens gagnés)
         processed_df['aerial_play'] = (
-            df['Won'].fillna(0) * 3
+            df['Won'] * 3
         ).clip(0, 100)
         
         # Distribution (passes complétées, précision)
-        processed_df['distribution'] = (
-            df['Cmp%'].fillna(70)
-        ).clip(0, 100)
+        processed_df['distribution'] = df['Cmp%'].clip(0, 100)
         
         # Chance Creation (passes décisives, passes clés)
         processed_df['chance_creation'] = (
-            (df['Ast'].fillna(0) * 5 + df['KP'].fillna(0) * 3)
+            (df['Ast'] * 5 + df['KP'] * 3)
         ).clip(0, 100)
         
         # Take On (dribbles réussis)
         processed_df['take_on'] = (
-            df['Succ'].fillna(0) * 10
+            df['Succ'] * 10
         ).clip(0, 100)
         
         # Finishing (buts, tirs cadrés)
         processed_df['finishing'] = (
-            (df['Gls'].fillna(0) * 5 + df['SoT'].fillna(0) * 2)
+            (df['Gls'] * 5 + df['SoT'] * 2)
         ).clip(0, 100)
         
-        # Filtrer les joueurs avec au moins quelques données
+        # Filtrer les joueurs avec au moins quelques données et s'assurer qu'il n'y a pas de valeurs NaN
         processed_df = processed_df[processed_df['minutes_played'] > 0].copy()
+        processed_df = processed_df.fillna(0)
         
         return processed_df
         
     except Exception as e:
         st.error(f"Erreur lors du chargement des données: {e}")
+        import traceback
+        st.error(traceback.format_exc())
         return pd.DataFrame()
 
 # Classe pour le modèle de Machine Learning
