@@ -448,13 +448,15 @@ def main():
         
         with col1:
             # Distribution par catégorie
-            category_counts = filtered_df['category'].value_counts()
+            category_counts = filtered_df['category'].value_counts().reset_index()
+            category_counts.columns = ['Catégorie', 'Nombre']
             fig_cat = px.bar(
-                x=category_counts.values,
-                y=category_counts.index,
+                category_counts,
+                x='Nombre',
+                y='Catégorie',
                 orientation='h',
                 title="Distribution par catégorie",
-                labels={'x': 'Nombre de joueurs', 'y': 'Catégorie'}
+                labels={'Nombre': 'Nombre de joueurs', 'Catégorie': 'Catégorie'}
             )
             fig_cat.update_layout(height=500)
             st.plotly_chart(fig_cat, use_container_width=True)
