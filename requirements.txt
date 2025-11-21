@@ -1,10 +1,4 @@
-# requirements.txt
-streamlit==1.28.0
-pandas>=2.2.2
-numpy>=1.25.0
-plotly==5.15.0
-scikit-learn>=1.4.0  # Updated for Python 3.13 compatibility
-markdown-it-py==3.0.0
-mdurl==0.1.2
-pygments==2.19.2
-rich>=10.14.0,<14    # Streamlit-compatible version
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.17.0
+numpy>=1.24.0
