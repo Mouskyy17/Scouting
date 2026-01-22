@@ -1,8 +1,254 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import numpy as np
 from datetime import datetime
+
+# ========== CONFIGURATION DES POIDS PAR POSTE ==========
+
+POSITION_SCORING = {
+    "GK": {
+        "description": "Gardiens de but",
+        "categories": {
+            "Saves & Shot Stopping": {
+                "weight": 35,
+                "columns": ["SoT", "Dist", "FK"],
+                "inverse": []
+            },
+            "Distribution": {
+                "weight": 25,
+                "columns": ["Cmp%", "TotDist", "PrgDist"],
+                "inverse": []
+            },
+            "Positioning & Command": {
+                "weight": 20,
+                "columns": ["Int", "Clr", "Err"],
+                "inverse": ["Err"]
+            },
+            "Aerial Ability": {
+                "weight": 15,
+                "columns": ["Won", "Won%"],
+                "inverse": []
+            },
+            "Concentration": {
+                "weight": 5,
+                "columns": ["CrdY", "CrdR"],
+                "inverse": ["CrdY", "CrdR"]
+            }
+        }
+    },
+    "DF": {
+        "description": "Défenseurs centraux",
+        "categories": {
+            "Defending": {
+                "weight": 35,
+                "columns": ["Tkl", "TklW", "Int", "Blocks", "Clr"],
+                "inverse": []
+            },
+            "Aerial Duels": {
+                "weight": 20,
+                "columns": ["Won", "Won%"],
+                "inverse": []
+            },
+            "Ball Playing": {
+                "weight": 20,
+                "columns": ["Cmp%", "PrgP", "PrgDist"],
+                "inverse": []
+            },
+            "Positioning": {
+                "weight": 15,
+                "columns": ["Err", "Tkl%"],
+                "inverse": ["Err"]
+            },
+            "Discipline": {
+                "weight": 10,
+                "columns": ["CrdY", "CrdR", "Fls"],
+                "inverse": ["CrdY", "CrdR", "Fls"]
+            }
+        }
+    },
+    "DF,MF": {
+        "description": "Défenseurs polyvalents / Latéraux",
+        "categories": {
+            "Defending": {
+                "weight": 30,
+                "columns": ["Tkl", "TklW", "Int", "Blocks"],
+                "inverse": []
+            },
+            "Offensive Support": {
+                "weight": 25,
+                "columns": ["Ast", "xAG", "KP", "Crs", "PPA"],
+                "inverse": []
+            },
+            "Ball Progression": {
+                "weight": 25,
+                "columns": ["PrgC", "PrgP", "Carries", "PrgDist"],
+                "inverse": []
+            },
+            "Defensive Positioning": {
+                "weight": 15,
+                "columns": ["Won", "Recov"],
+                "inverse": []
+            },
+            "Distribution": {
+                "weight": 5,
+                "columns": ["Cmp%", "TotDist"],
+                "inverse": []
+            }
+        }
+    },
+    "MF,DF": {
+        "description": "Milieux défensifs",
+        "categories": {
+            "Ball Recovery": {
+                "weight": 35,
+                "columns": ["Tkl", "TklW", "Int", "Recov"],
+                "inverse": []
+            },
+            "Distribution": {
+                "weight": 30,
+                "columns": ["Cmp%", "PrgP", "PrgDist", "TotDist"],
+                "inverse": []
+            },
+            "Defensive Positioning": {
+                "weight": 20,
+                "columns": ["Blocks", "Won%"],
+                "inverse": []
+            },
+            "Discipline": {
+                "weight": 10,
+                "columns": ["CrdY", "CrdR", "Fls"],
+                "inverse": ["CrdY", "CrdR", "Fls"]
+            },
+            "Ball Progression": {
+                "weight": 5,
+                "columns": ["PrgC", "Carries"],
+                "inverse": []
+            }
+        }
+    },
+    "MF": {
+        "description": "Milieux de terrain centraux",
+        "categories": {
+            "Passing & Distribution": {
+                "weight": 30,
+                "columns": ["Cmp%", "TotDist", "PrgDist", "PrgP"],
+                "inverse": []
+            },
+            "Chance Creation": {
+                "weight": 25,
+                "columns": ["KP", "xAG", "Ast", "SCA"],
+                "inverse": []
+            },
+            "Ball Progression": {
+                "weight": 20,
+                "columns": ["PrgC", "Carries", "Succ", "PrgR"],
+                "inverse": []
+            },
+            "Defensive Contribution": {
+                "weight": 15,
+                "columns": ["Tkl", "Int", "Recov"],
+                "inverse": []
+            },
+            "Shooting": {
+                "weight": 10,
+                "columns": ["Gls", "xG", "Sh", "SoT%"],
+                "inverse": []
+            }
+        }
+    },
+    "MF,FW": {
+        "description": "Milieux offensifs / Meneurs de jeu",
+        "categories": {
+            "Chance Creation": {
+                "weight": 30,
+                "columns": ["KP", "xAG", "Ast", "SCA", "GCA"],
+                "inverse": []
+            },
+            "Dribbling & Take-Ons": {
+                "weight": 25,
+                "columns": ["Succ", "Succ%", "PrgC", "Mis"],
+                "inverse": ["Mis"]
+            },
+            "Shooting": {
+                "weight": 25,
+                "columns": ["Gls", "xG", "Sh", "SoT%", "G/Sh"],
+                "inverse": []
+            },
+            "Ball Progression": {
+                "weight": 15,
+                "columns": ["PrgP", "PrgR", "Carries"],
+                "inverse": []
+            },
+            "Link-up Play": {
+                "weight": 5,
+                "columns": ["Cmp%", "TO"],
+                "inverse": ["TO"]
+            }
+        }
+    },
+    "FW,MF": {
+        "description": "Attaquants polyvalents / Seconds attaquants",
+        "categories": {
+            "Finishing": {
+                "weight": 30,
+                "columns": ["Gls", "xG", "SoT%", "G/Sh", "G/SoT"],
+                "inverse": []
+            },
+            "Chance Creation": {
+                "weight": 25,
+                "columns": ["Ast", "xAG", "KP", "SCA"],
+                "inverse": []
+            },
+            "Dribbling": {
+                "weight": 20,
+                "columns": ["Succ", "Succ%", "PrgC"],
+                "inverse": []
+            },
+            "Movement & Positioning": {
+                "weight": 15,
+                "columns": ["Touches", "PrgR", "Carries"],
+                "inverse": []
+            },
+            "Shooting Volume": {
+                "weight": 10,
+                "columns": ["Sh", "SoT", "Dist"],
+                "inverse": []
+            }
+        }
+    },
+    "FW": {
+        "description": "Attaquants purs / Buteurs",
+        "categories": {
+            "Finishing": {
+                "weight": 40,
+                "columns": ["Gls", "xG", "G/Sh", "G/SoT", "SoT%"],
+                "inverse": []
+            },
+            "Shooting": {
+                "weight": 25,
+                "columns": ["Sh", "SoT", "Dist"],
+                "inverse": []
+            },
+            "Positioning": {
+                "weight": 15,
+                "columns": ["Touches", "PrgR"],
+                "inverse": []
+            },
+            "Aerial Ability": {
+                "weight": 10,
+                "columns": ["Won", "Won%"],
+                "inverse": []
+            },
+            "Link-up": {
+                "weight": 10,
+                "columns": ["Ast", "KP", "Cmp%"],
+                "inverse": []
+            }
+        }
+    }
+}
 
 # ========== CONFIGURATION ==========
 st.set_page_config(
@@ -410,7 +656,7 @@ st.markdown('<p class="subtitle">Best U21 Players Worldwide - Born 2004 or later
 
 menu = st.sidebar.radio(
     "📋 Navigation",
-    ["🏠 Home", "📊 Rankings", "👤 Player Profile", "⚖️ Comparison"],
+    ["🏠 Home", "📊 Rankings", "👤 Player Profile", "⚖️ Comparison", "🎯 By Category", "📈 Analytics"],
     label_visibility="visible"
 )
 
@@ -687,6 +933,234 @@ elif menu == "⚖️ Comparison":
             <h3 style="color: #00FF85; margin-bottom: 1rem;">⭐ {winner} leads by {diff:.1f} points!</h3>
             <p style="color: #AAA;">Based on overall performance</p>
         </div>""", unsafe_allow_html=True)
+
+# ========== PAGE: BY CATEGORY ==========
+elif menu == "🎯 By Category":
+    st.markdown("## 🎯 Best Players by Category")
+    st.markdown("---")
+    
+    st.markdown("""
+    Find the best players in specific categories for each position.
+    Each position has unique categories based on its requirements.
+    """)
+    
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        position_selected = st.selectbox(
+            "📍 Select Position",
+            options=sorted([pos for pos in df['Pos'].unique() if pos in POSITION_SCORING]),
+            key='cat_pos'
+        )
+    
+    with col2:
+        if position_selected and position_selected in POSITION_SCORING:
+            categories = list(POSITION_SCORING[position_selected]['categories'].keys())
+            category_selected = st.selectbox("🎯 Select Category", options=categories)
+    
+    if position_selected and category_selected:
+        st.markdown(f"### 🏆 Top 20 {position_selected} in {category_selected}")
+        
+        score_col = f"{category_selected}_Score"
+        
+        if score_col in df.columns:
+            position_df = df[df['Pos'] == position_selected].copy()
+            
+            # Filtrer les joueurs avec temps de jeu minimum
+            min_minutes_cat = st.slider("Min Minutes Played", 0, 2000, 270, key='min_cat')
+            position_df = position_df[position_df['Min'] >= min_minutes_cat]
+            
+            if len(position_df) > 0:
+                top_category = position_df.nlargest(20, score_col)[
+                    ['Player', 'Squad', 'Comp', 'Age', 'Min', score_col, 'Global_Score']
+                ].copy()
+                
+                top_category['Rank'] = range(1, len(top_category) + 1)
+                top_category = top_category[['Rank', 'Player', 'Squad', 'Comp', 'Age', 'Min', score_col, 'Global_Score']]
+                
+                st.dataframe(
+                    top_category,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        score_col: st.column_config.ProgressColumn(
+                            category_selected,
+                            format="%.1f",
+                            min_value=0,
+                            max_value=100
+                        ),
+                        "Global_Score": st.column_config.ProgressColumn(
+                            "Overall",
+                            format="%.1f",
+                            min_value=0,
+                            max_value=100
+                        ),
+                    }
+                )
+                
+                # Distribution des scores pour cette catégorie
+                st.markdown("---")
+                st.markdown(f"### 📊 Score Distribution - {category_selected}")
+                
+                fig_dist = px.histogram(
+                    position_df,
+                    x=score_col,
+                    nbins=20,
+                    title=f'{category_selected} Score Distribution for {position_selected}',
+                    labels={score_col: 'Score', 'count': 'Number of Players'},
+                    color_discrete_sequence=['#00FF85']
+                )
+                
+                fig_dist.update_layout(
+                    paper_bgcolor='#0E1117',
+                    plot_bgcolor='#1E1E1E',
+                    font=dict(color='#FFFFFF'),
+                    xaxis=dict(gridcolor='#3D3D3D'),
+                    yaxis=dict(gridcolor='#3D3D3D')
+                )
+                
+                st.plotly_chart(fig_dist, use_container_width=True)
+                
+                # Stats
+                st.markdown("### 📈 Category Statistics")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Average", f"{position_df[score_col].mean():.1f}")
+                with col2:
+                    st.metric("Median", f"{position_df[score_col].median():.1f}")
+                with col3:
+                    st.metric("Max", f"{position_df[score_col].max():.1f}")
+                with col4:
+                    st.metric("Std Dev", f"{position_df[score_col].std():.1f}")
+            else:
+                st.warning("⚠️ No players found with the specified criteria")
+        else:
+            st.error(f"❌ Category score column '{score_col}' not found")
+
+# ========== PAGE: ANALYTICS ==========
+elif menu == "📈 Analytics":
+    st.markdown("## 📈 Advanced Analytics")
+    st.markdown("---")
+    
+    # Score distribution par position
+    st.markdown("### 📊 Score Distribution by Position")
+    
+    positions_to_analyze = st.multiselect(
+        "Select positions to analyze",
+        options=sorted([pos for pos in df['Pos'].unique() if pos in POSITION_SCORING]),
+        default=list(POSITION_SCORING.keys())[:4]
+    )
+    
+    if positions_to_analyze:
+        fig_box = go.Figure()
+        
+        for position in positions_to_analyze:
+            position_df = df[df['Pos'] == position]
+            
+            fig_box.add_trace(go.Box(
+                y=position_df['Global_Score'],
+                name=position,
+                boxmean='sd'
+            ))
+        
+        fig_box.update_layout(
+            title='Score Distribution by Position',
+            yaxis_title='Score',
+            paper_bgcolor='#0E1117',
+            plot_bgcolor='#1E1E1E',
+            font=dict(color='#FFFFFF'),
+            xaxis=dict(gridcolor='#3D3D3D'),
+            yaxis=dict(gridcolor='#3D3D3D'),
+            showlegend=False
+        )
+        
+        st.plotly_chart(fig_box, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # Statistiques par position
+    st.markdown("### 📈 Statistics by Position")
+    
+    stats_by_position = []
+    for position in sorted([pos for pos in df['Pos'].unique() if pos in POSITION_SCORING]):
+        position_df = df[df['Pos'] == position]
+        if len(position_df) > 0:
+            stats_by_position.append({
+                'Position': position,
+                'Description': POSITION_SCORING[position]['description'],
+                'Count': len(position_df),
+                'Avg Score': position_df['Global_Score'].mean(),
+                'Median': position_df['Global_Score'].median(),
+                'Max': position_df['Global_Score'].max(),
+                'Std Dev': position_df['Global_Score'].std()
+            })
+    
+    stats_df = pd.DataFrame(stats_by_position)
+    stats_df = stats_df.round(1)
+    
+    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
+    # Top leagues
+    st.markdown("### 🏆 Top Leagues by Average Score")
+    
+    league_stats = df.groupby('Comp').agg({
+        'Global_Score': 'mean',
+        'Player': 'count'
+    }).round(1)
+    league_stats.columns = ['Avg Score', 'Players']
+    league_stats = league_stats[league_stats['Players'] >= 10].sort_values('Avg Score', ascending=False).head(15)
+    
+    fig_leagues = px.bar(
+        league_stats.reset_index(),
+        x='Comp',
+        y='Avg Score',
+        title='Average Player Score by League (min. 10 players)',
+        labels={'Comp': 'League', 'Avg Score': 'Average Score'},
+        color='Avg Score',
+        color_continuous_scale='Viridis'
+    )
+    
+    fig_leagues.update_layout(
+        paper_bgcolor='#0E1117',
+        plot_bgcolor='#1E1E1E',
+        font=dict(color='#FFFFFF'),
+        xaxis=dict(gridcolor='#3D3D3D', tickangle=-45),
+        yaxis=dict(gridcolor='#3D3D3D')
+    )
+    
+    st.plotly_chart(fig_leagues, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # Age vs Score
+    st.markdown("### 📊 Age vs Performance")
+    
+    fig_scatter = px.scatter(
+        df[df['Min'] >= 270],
+        x='Age',
+        y='Global_Score',
+        color='Pos',
+        size='Min',
+        hover_data=['Player', 'Squad', 'Comp'],
+        title='Age vs Score (min. 270 minutes played)',
+        labels={'Age': 'Age', 'Global_Score': 'Score', 'Pos': 'Position'},
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    
+    fig_scatter.update_layout(
+        paper_bgcolor='#0E1117',
+        plot_bgcolor='#1E1E1E',
+        font=dict(color='#FFFFFF'),
+        xaxis=dict(gridcolor='#3D3D3D'),
+        yaxis=dict(gridcolor='#3D3D3D')
+    )
+    
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ========== FOOTER ==========
 st.markdown("---")
