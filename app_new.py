@@ -544,7 +544,7 @@ def get_position_breakdown(player_row, position):
 @st.cache_data
 def load_data():
     """Charge et prépare les données"""
-    df = pd.read_csv('Joueurs_2004.csv', sep=';', encoding='utf-8-sig')
+    df = pd.read_csv('Joueurs_2004_2.csv', sep=';', encoding='utf-8-sig')
     
     # Nettoyage
     df.columns = df.columns.str.strip()
