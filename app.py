@@ -405,7 +405,7 @@ def display_player_card(player_data):
 df = load_data()
 
 # ========== NAVIGATION ==========
-st.markdown('<h1 class="main-title">⚽ CIES Scouting Report</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title">⚽ U21 Scouting Report</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Best U21 Players Worldwide - Born 2004 or later</p>', unsafe_allow_html=True)
 
 menu = st.sidebar.radio(
